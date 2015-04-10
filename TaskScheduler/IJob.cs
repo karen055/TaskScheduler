@@ -6,9 +6,14 @@ using System.Threading.Tasks;
 
 namespace TaskScheduler
 {
-    class Job
+    interface IJob
     {
-        public virtual void Execute()
+        void Run();
+    }
+
+    class Job : IJob
+    {
+        public void Run()
         {
             Console.WriteLine(DateTime.Now);
         }

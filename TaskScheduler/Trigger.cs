@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace TaskScheduler
 {
-    class Trigger
+    class Trigger : ITrigger
     {
         private readonly Timer _timer;
 
@@ -24,18 +24,18 @@ namespace TaskScheduler
             RepeatCount = repeatCount;
 
 
-            Start();
+            //Start();
         }
 
         public Trigger(bool startNow = true)
             : this(DateTimeOffset.Now, Timeout.InfiniteTimeSpan)
         {
-            Start(startNow);
+            //Start(startNow);
         }
         public Trigger(TimeSpan interval, int repeatCount = -1, bool startNow = true)
             : this(DateTimeOffset.Now, Timeout.InfiniteTimeSpan)
         {
-            Start(startNow);
+            //Start(startNow);
         }
 
 
@@ -88,7 +88,7 @@ namespace TaskScheduler
                             long repeatsPassed = timePassedTicks / RepeatInterval.Ticks;
                             Console.WriteLine(repeatsPassed);
                             RepeatCount -= (int)repeatsPassed;
-                            _isRepeating = true;
+                            IsRepeating = true;
                         }
                         else
                         {
@@ -116,22 +116,29 @@ namespace TaskScheduler
             _timer.Change(Timeout.Infinite, Timeout.Infinite);
         }
 
-        private bool _isRepeating;
+        public bool IsRepeating { get; set; }
+
+        public bool Enabled
+        {
+            get { throw new NotImplementedException(); }
+            set { throw new NotImplementedException(); }
+        }
+
         private void TimerCallback(object obj)
         {
             foreach (Job job in _jobs)
             {
-                //job.Execute();
+                job.Run();
             }
             if (RepeatCount != -1)
             {
-                if(_isRepeating)
+                if(IsRepeating)
                 RepeatCount--;
                 if (RepeatCount == 0)
                     Stop();
-                if (!_isRepeating) _isRepeating = true;
+                if (!IsRepeating) IsRepeating = true;
             }
-            Console.WriteLine((DateTimeOffset.Now - lastTime).TotalSeconds + " Count: " + RepeatCount);
+            //Console.WriteLine((DateTimeOffset.Now - lastTime).TotalSeconds + " Count: " + RepeatCount);
             lastTime = DateTimeOffset.Now;
         }
 
