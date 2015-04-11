@@ -46,6 +46,12 @@ namespace TaskScheduler
 
         }
 
+        public string Id
+        {
+            get { throw new NotImplementedException(); }
+            set { throw new NotImplementedException(); }
+        }
+
         public DateTimeOffset StartTime
         {
             get { return _startTime; }
@@ -123,6 +129,8 @@ namespace TaskScheduler
             get { throw new NotImplementedException(); }
             set { throw new NotImplementedException(); }
         }
+
+        public bool Exclusive { get; set; }
 
         private void TimerCallback(object obj)
         {
