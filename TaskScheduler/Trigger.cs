@@ -12,25 +12,21 @@ namespace TaskScheduler
         private readonly Timer _timer;
 
         private List<Job> _jobs;
-        private DateTimeOffset _startTime;
         private DateTimeOffset lastTime;
 
         public Trigger(DateTimeOffset startTime, TimeSpan interval, int repeatCount = -1)
         {
             _jobs = new List<Job>();
             _timer = new Timer(TimerCallback);
-            _startTime = startTime;
+            StartTime = startTime;
             RepeatInterval = interval;
             RepeatCount = repeatCount;
-
-
-            //Start();
         }
 
         public Trigger(bool startNow = true)
             : this(DateTimeOffset.Now, Timeout.InfiniteTimeSpan)
         {
-            //Start(startNow);
+            ToStartNow = startNow;
         }
         public Trigger(TimeSpan interval, int repeatCount = -1, bool startNow = true)
             : this(DateTimeOffset.Now, Timeout.InfiniteTimeSpan)
@@ -46,19 +42,16 @@ namespace TaskScheduler
 
         }
 
-        public string Id
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public string Id { get; set; }
 
-        public DateTimeOffset StartTime
+        public DateTimeOffset StartTime { get; set; }
+
+        public bool ToStartNow { get; set; }
+
+        public ITrigger StartNow()
         {
-            get { return _startTime; }
-            set
-            {
-                _startTime = value < DateTimeOffset.Now ? DateTimeOffset.Now : value;
-            }
+            ToStartNow = true;
+            return this;
         }
 
         public TimeSpan RepeatInterval { get; set; }
@@ -78,13 +71,13 @@ namespace TaskScheduler
             {
                 dueTime = TimeSpan.FromMilliseconds(0);
             }
-            else if (_startTime < dateTimeNow)
+            else if (StartTime < dateTimeNow)
             {
                 if (RepeatInterval == Timeout.InfiniteTimeSpan)
                     dueTime = Timeout.InfiniteTimeSpan;
                 else
                 {
-                    long timePassedTicks = dateTimeNow.Ticks - _startTime.Ticks;
+                    long timePassedTicks = dateTimeNow.Ticks - StartTime.Ticks;
                     dueTime = TimeSpan.FromTicks(RepeatInterval.Ticks - timePassedTicks % RepeatInterval.Ticks);
                     if (RepeatCount > 0)
                     {
@@ -105,7 +98,7 @@ namespace TaskScheduler
             }
             else
             {
-                dueTime = _startTime - dateTimeNow;
+                dueTime = StartTime - dateTimeNow;
             }
 
             _timer.Change(dueTime, RepeatInterval);
@@ -124,11 +117,7 @@ namespace TaskScheduler
 
         public bool IsRepeating { get; set; }
 
-        public bool Enabled
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public bool Enabled { get; set; }
 
         public bool Exclusive { get; set; }
 

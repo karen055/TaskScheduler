@@ -11,99 +11,98 @@ namespace TaskScheduler
     class SchedulerTask : ITask
     {
         private readonly ISet<ITrigger> _triggers;
-        private readonly ISet<IJob> _jobs;
-        private readonly IList<Action> _actions;
+        private readonly ISet<IJob> _commonJobs;
+        private readonly ISet<Action> _commonActions;
         private readonly IDictionary<ITrigger, Timer> _timers;
-        private readonly IDictionary<ITrigger, List<object>> _triggerJobs;
+        private readonly IDictionary<ITrigger, IList<IJob>> _exclusiveJobs;
+        private readonly IDictionary<ITrigger, IList<Action>> _exclusiveActions;
+        public IList<IJob> Jobs
+        {
+            get { return _exclusiveJobs.Values.SelectMany(jobs => jobs).Concat(_commonJobs).ToList(); }
+        }
+
+        public IList<Action> Actions
+        {
+            get { return _exclusiveActions.Values.SelectMany(actions => actions).Concat(_commonActions).ToList(); }
+        }
 
         public SchedulerTask()
         {
-            _triggerJobs = new Dictionary<ITrigger, List<object>>();
+            _exclusiveJobs = new Dictionary<ITrigger, IList<IJob>>();
+            _exclusiveActions = new Dictionary<ITrigger, IList<Action>>();
             _triggers = new HashSet<ITrigger>();
-            _jobs = new HashSet<IJob>();
+            _commonJobs = new HashSet<IJob>();
             _timers = new Dictionary<ITrigger, Timer>();
-            _actions = new List<Action>();
+            _commonActions = new HashSet<Action>();
         }
 
-        public string Id
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public string Id { get; set; }
 
-        public string Name
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public string Name { get; set; }
 
-        public bool Enabled
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public bool Enabled { get; set; }
 
-        public bool RunIfMissed
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public bool IsRunning { get; set; }
 
-        public bool AllowConcurrent
-        {
-            get { throw new NotImplementedException(); }
-            set { throw new NotImplementedException(); }
-        }
+        public bool RunIfMissed { get; set; }
 
-        public SchedulerTask AddTrigger(ITrigger trigger)
+        public bool AllowConcurrent { get; set; }
+
+        public ITask AddTrigger(ITrigger trigger)
         {
             _triggers.Add(trigger);
             return this;
         }
-        public void AddTrigger(ITrigger trigger, IJob job)
+        public ITask AddTrigger(ITrigger trigger, IJob job)
         {
             _triggers.Add(trigger);
-            _jobs.Add(job);
-            if (_triggerJobs.ContainsKey(trigger))
-                _triggerJobs[trigger].Add(job);
+            if (_exclusiveJobs.ContainsKey(trigger))
+                _exclusiveJobs[trigger].Add(job);
             else
-                _triggerJobs.Add(trigger, new List<object> { job });
+                _exclusiveJobs.Add(trigger, new[] { job });
+            return this;
         }
-        public void AddTrigger(ITrigger trigger, Action action)
+        public ITask AddTrigger(ITrigger trigger, Action action)
         {
             _triggers.Add(trigger);
-            _actions.Add(action);
-            if (_triggerJobs.ContainsKey(trigger))
-                _triggerJobs[trigger].Add(action);
+            if (_exclusiveActions.ContainsKey(trigger))
+                _exclusiveActions[trigger].Add(action);
             else
-                _triggerJobs.Add(trigger, new List<object> { action });
+                _exclusiveActions.Add(trigger, new[] { action });
+            return this;
         }
-        public void AddAction(Action action)
+        public ITask AddAction(Action action)
         {
-            _actions.Add(action);
+            _commonActions.Add(action);
+            return this;
         }
 
-        public SchedulerTask AddJob(IJob job)
+        public ITask AddJob(IJob job)
         {
-            _jobs.Add(job);
+            _commonJobs.Add(job);
             return this;
         }
 
         public void Stop()
         {
-            throw new NotImplementedException();
+            foreach (ITrigger trigger in _triggers)
+            {
+                _timers[trigger].Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            IsRunning = false;
         }
 
         public void Start()
         {
+            if (IsRunning) return;
             foreach (ITrigger trigger in _triggers)
             {
-                bool startNow = false;
                 DateTimeOffset dateTimeNow = DateTimeOffset.Now;
                 TimeSpan dueTime;
-                if (startNow)
+                if (trigger.ToStartNow)
                 {
                     dueTime = TimeSpan.FromMilliseconds(0);
+                    trigger.StartTime = dateTimeNow;
                 }
                 else if (trigger.StartTime < dateTimeNow)
                 {
@@ -135,58 +134,47 @@ namespace TaskScheduler
                     dueTime = trigger.StartTime - dateTimeNow;
                 }
                 ITrigger triggerLocal = trigger;
-                Timer timer = new Timer(obj => Callback(triggerLocal, obj as Timer));
-                timer.Change(dueTime, trigger.RepeatInterval);
+                Timer timer = new Timer(obj => Callback(triggerLocal, GetJobs(triggerLocal)));
                 _timers.Add(trigger, timer);
+                timer.Change(dueTime, trigger.RepeatInterval);
             }
+            IsRunning = true;
         }
 
-        private void Callback(ITrigger trigger, Timer timer)
+        private void Callback(ITrigger trigger, IEnumerable<IJob> jobs)
         {
-            List<object> jobs;
-            if (_triggerJobs.ContainsKey(trigger))
+            if (jobs != null)
             {
-                if (trigger.Exclusive)
-                    jobs = _triggerJobs[trigger];
-                else
+                foreach (var job in jobs)
                 {
-                    jobs = _jobs.Concat(_triggerJobs[trigger].ToList()).ToList();
-                }
-            }
-            else jobs = _jobs.ToList<object>();
-
-            foreach (var job in jobs)
-            {
-                Console.WriteLine(job.GetType());
-                if (job is IJob)
-                {
-                    IJob j = (IJob)job;
-                    if (j.Concurrent)
-                        Task.Run(new Action(j.Run));
+                    if (job.Concurrent)
+                        Task.Run(new Action(job.Run));
                     else
-                        ((IJob)job).Run();
+                        job.Run();
                 }
-                if (job is Action)
-                {
-                    ((Action)job)();
-                }
-
-                //Task.Run(() => job.Run());
             }
 
-            /*foreach (Action action in _actions)
-            {
-                action();
-            }*/
-            //Parallel.ForEach(_actions, action => action());
             if (trigger.RepeatCount != -1)
             {
                 if (trigger.IsRepeating)
                     trigger.RepeatCount--;
                 if (trigger.RepeatCount == 0)
-                    timer.Change(Timeout.Infinite, Timeout.Infinite);
+                    _timers[trigger].Change(Timeout.Infinite, Timeout.Infinite);
                 if (!trigger.IsRepeating) trigger.IsRepeating = true;
             }
+        }
+
+        private IEnumerable<IJob> GetJobs(ITrigger trigger)
+        {
+            if (trigger.Exclusive)
+            {
+                if (_exclusiveJobs.ContainsKey(trigger))
+                    return _exclusiveJobs[trigger];
+                return null;
+            }
+            if (_exclusiveJobs.ContainsKey(trigger))
+                return _exclusiveJobs[trigger].Concat(_commonJobs);
+            return _commonJobs;
         }
     }
 }
